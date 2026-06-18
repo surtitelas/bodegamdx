@@ -940,8 +940,8 @@ var nidR=1, nidM=1, itemCounter=0, selTiendaSal='', _lastSync=null;
 // ══════════════════════════════════════════════════════════
 async function loadFromCloud(){
   try{
-    if(recepciones.length===0&&window._DI_R){
-      recepciones=window._DI_R||[];
+    if(window._DI_R){
+      recepciones=window._DI_R;
       movimientos=(window._DI_M||[]).map(function(m){var o=Object.assign({},m);if(!o.tienda&&o.destino)o.tienda=o.destino;return o;});
     }
     nidR=Math.max(0,...(recepciones.length?recepciones.map(r=>r.id):[0]))+1;
