@@ -943,6 +943,11 @@ async function loadFromCloud(){
     if(window._DI_R&&window._DI_R.length>0){
       recepciones=window._DI_R;
       movimientos=(window._DI_M||[]).map(function(m){var o=Object.assign({},m);if(!o.tienda&&o.destino)o.tienda=o.destino;return o;});
+    } else {
+      var rv=await window.storage.get('textil:recepciones');
+      var mv=await window.storage.get('textil:movimientos');
+      if(rv&&rv.value){try{recepciones=JSON.parse(rv.value);}catch(e){recepciones=[];}}
+      if(mv&&mv.value){try{var raw=JSON.parse(mv.value);movimientos=raw.map(function(m){var o=Object.assign({},m);if(!o.tienda&&o.destino)o.tienda=o.destino;return o;});}catch(e){movimientos=[];}}
     }
     nidR=Math.max(0,...(recepciones.length?recepciones.map(r=>r.id):[0]))+1;
     nidM=Math.max(0,...(movimientos.length?movimientos.map(m=>m.id):[0]))+1;
@@ -959,8 +964,8 @@ async function loadFromCloud(){
 async function save(){
   setSyncStatus('saving');
   try{
-    await window.storage.set('textil:recepciones',JSON.stringify(recepciones),true);
-    await window.storage.set('textil:movimientos',JSON.stringify(movimientos),true);
+    await window.storage.set('textil:recepciones',JSON.stringify(recepciones));
+    await window.storage.set('textil:movimientos',JSON.stringify(movimientos));
     _lastSync=new Date();
     setSyncStatus('ok');
   }catch(e){setSyncStatus('err');console.warn('save error:',e);}
