@@ -941,14 +941,8 @@ var GAS_URL='https://script.google.com/macros/s/AKfycbwEjHlcpbofYD3jbZx-d8swA1nl
 // ══════════════════════════════════════════════════════════
 async function loadFromCloud(){
   try{
-    // 1. Cargar inmediatamente desde datos embebidos o localStorage (sin esperar Drive)
-    if(window._DI_R&&window._DI_R.length>0){
-      recepciones=window._DI_R;
-      movimientos=(window._DI_M||[]).map(function(m){var o=Object.assign({},m);if(!o.tienda&&o.destino)o.tienda=o.destino;return o;});
-    } else {
-      try{var rv=localStorage.getItem('textil:textil:recepciones');if(rv)recepciones=JSON.parse(rv);}catch(e){}
-      try{var mv=localStorage.getItem('textil:textil:movimientos');if(mv){var r2=JSON.parse(mv);movimientos=r2.map(function(m){var o=Object.assign({},m);if(!o.tienda&&o.destino)o.tienda=o.destino;return o;});}}catch(e){}
-    }
+    recepciones=window._DI_R||[];
+    movimientos=(window._DI_M||[]).map(function(m){var o=Object.assign({},m);if(!o.tienda&&o.destino)o.tienda=o.destino;return o;});
     nidR=Math.max(0,...(recepciones.length?recepciones.map(r=>r.id):[0]))+1;
     nidM=Math.max(0,...(movimientos.length?movimientos.map(m=>m.id):[0]))+1;
     TELAS.sort((a,b)=>a.name.localeCompare(b.name));
@@ -956,29 +950,6 @@ async function loadFromCloud(){
     setSyncStatus('ok');
     var lmov=document.getElementById('load-msg-ov');
     if(lmov)lmov.textContent='Listo';
-    // 2. En segundo plano: sincronizar con Google Drive (sin bloquear la UI)
-    setTimeout(function(){
-      var ctrl=new AbortController();
-      setTimeout(function(){ctrl.abort();},8000);
-      fetch(GAS_URL+'?action=load',{signal:ctrl.signal})
-        .then(function(r){return r.json();})
-        .then(function(data){
-          if(data&&data.recepciones){
-            var driveR=JSON.parse(data.recepciones);
-            recepciones=driveR;
-            if(data.movimientos){var raw=JSON.parse(data.movimientos);movimientos=raw.map(function(m){var o=Object.assign({},m);if(!o.tienda&&o.destino)o.tienda=o.destino;return o;});}
-            nidR=Math.max(0,...(recepciones.length?recepciones.map(function(r){return r.id;}):[0]))+1;
-            nidM=Math.max(0,...(movimientos.length?movimientos.map(function(m){return m.id;}):[0]))+1;
-            renderDash();updateSidebar();
-            setSyncStatus('ok');
-          } else if(recepciones.length>0){
-            // Drive vacío: subir datos actuales
-            var rJ=JSON.stringify(recepciones);var mJ=JSON.stringify(movimientos);
-            fetch(GAS_URL,{method:'POST',mode:'no-cors',body:JSON.stringify({recepciones:rJ,movimientos:mJ})});
-          }
-        })
-        .catch(function(e){console.warn('[TEXTIL] Drive sync:',e.message);});
-    },500);
   }catch(e){
     setSyncStatus('err');
     console.warn('loadFromCloud error:',e);
@@ -989,12 +960,10 @@ async function save(){
   try{
     var rJson=JSON.stringify(recepciones);
     var mJson=JSON.stringify(movimientos);
-    // Cache local
     try{localStorage.setItem('textil:textil:recepciones',rJson);localStorage.setItem('textil:textil:movimientos',mJson);}catch(e){}
-    // Guardar en Google Drive
     try{
-      await fetch(GAS_URL,{method:'POST',mode:'no-cors',body:JSON.stringify({recepciones:rJson,movimientos:mJson})});
-    }catch(fe){console.warn('[TEXTIL] No se pudo guardar en Drive:',fe);}
+      fetch(GAS_URL,{method:'POST',mode:'no-cors',body:JSON.stringify({recepciones:rJson,movimientos:mJson})});
+    }catch(fe){}
     _lastSync=new Date();
     setSyncStatus('ok');
   }catch(e){setSyncStatus('err');console.warn('save error:',e);}
