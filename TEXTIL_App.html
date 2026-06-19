@@ -941,41 +941,13 @@ var GAS_URL='https://script.google.com/macros/s/AKfycbwEjHlcpbofYD3jbZx-d8swA1nl
 // ══════════════════════════════════════════════════════════
 async function loadFromCloud(){
   try{
-    var loaded=false;
-    // 1. Intentar cargar desde Google Drive via Apps Script
-    try{
-      var resp=await fetch(GAS_URL+'?action=load');
-      var data=await resp.json();
-      if(data.recepciones){
-        recepciones=JSON.parse(data.recepciones);
-        try{localStorage.setItem('textil:textil:recepciones',data.recepciones);}catch(e){}
-        loaded=true;
-      }
-      if(data.movimientos){
-        var raw=JSON.parse(data.movimientos);
-        movimientos=raw.map(function(m){var o=Object.assign({},m);if(!o.tienda&&o.destino)o.tienda=o.destino;return o;});
-        try{localStorage.setItem('textil:textil:movimientos',data.movimientos);}catch(e){}
-      }
-    }catch(fe){console.warn('[TEXTIL] Drive no disponible, usando cache local');}
-    // 2. Si Drive falló o vacío, usar datos embebidos o localStorage
-    if(!loaded){
-      var fromEmbedded=false;
-      if(window._DI_R&&window._DI_R.length>0){
-        recepciones=window._DI_R;
-        movimientos=(window._DI_M||[]).map(function(m){var o=Object.assign({},m);if(!o.tienda&&o.destino)o.tienda=o.destino;return o;});
-        fromEmbedded=true;
-      } else {
-        try{var rv=localStorage.getItem('textil:textil:recepciones');if(rv)recepciones=JSON.parse(rv);}catch(e){}
-        try{var mv=localStorage.getItem('textil:textil:movimientos');if(mv){var r2=JSON.parse(mv);movimientos=r2.map(function(m){var o=Object.assign({},m);if(!o.tienda&&o.destino)o.tienda=o.destino;return o;});}}catch(e){}
-      }
-      // Si vino de datos embebidos, subir al Drive para que todos los dispositivos los vean
-      if(fromEmbedded&&recepciones.length>0){
-        try{
-          var rJ=JSON.stringify(recepciones);var mJ=JSON.stringify(movimientos);
-          fetch(GAS_URL,{method:'POST',mode:'no-cors',body:JSON.stringify({recepciones:rJ,movimientos:mJ})});
-          localStorage.setItem('textil:textil:recepciones',rJ);localStorage.setItem('textil:textil:movimientos',mJ);
-        }catch(e){}
-      }
+    // 1. Cargar inmediatamente desde datos embebidos o localStorage (sin esperar Drive)
+    if(window._DI_R&&window._DI_R.length>0){
+      recepciones=window._DI_R;
+      movimientos=(window._DI_M||[]).map(function(m){var o=Object.assign({},m);if(!o.tienda&&o.destino)o.tienda=o.destino;return o;});
+    } else {
+      try{var rv=localStorage.getItem('textil:textil:recepciones');if(rv)recepciones=JSON.parse(rv);}catch(e){}
+      try{var mv=localStorage.getItem('textil:textil:movimientos');if(mv){var r2=JSON.parse(mv);movimientos=r2.map(function(m){var o=Object.assign({},m);if(!o.tienda&&o.destino)o.tienda=o.destino;return o;});}}catch(e){}
     }
     nidR=Math.max(0,...(recepciones.length?recepciones.map(r=>r.id):[0]))+1;
     nidM=Math.max(0,...(movimientos.length?movimientos.map(m=>m.id):[0]))+1;
@@ -984,6 +956,29 @@ async function loadFromCloud(){
     setSyncStatus('ok');
     var lmov=document.getElementById('load-msg-ov');
     if(lmov)lmov.textContent='Listo';
+    // 2. En segundo plano: sincronizar con Google Drive (sin bloquear la UI)
+    setTimeout(function(){
+      var ctrl=new AbortController();
+      setTimeout(function(){ctrl.abort();},8000);
+      fetch(GAS_URL+'?action=load',{signal:ctrl.signal})
+        .then(function(r){return r.json();})
+        .then(function(data){
+          if(data&&data.recepciones){
+            var driveR=JSON.parse(data.recepciones);
+            recepciones=driveR;
+            if(data.movimientos){var raw=JSON.parse(data.movimientos);movimientos=raw.map(function(m){var o=Object.assign({},m);if(!o.tienda&&o.destino)o.tienda=o.destino;return o;});}
+            nidR=Math.max(0,...(recepciones.length?recepciones.map(function(r){return r.id;}):[0]))+1;
+            nidM=Math.max(0,...(movimientos.length?movimientos.map(function(m){return m.id;}):[0]))+1;
+            renderDash();updateSidebar();
+            setSyncStatus('ok');
+          } else if(recepciones.length>0){
+            // Drive vacío: subir datos actuales
+            var rJ=JSON.stringify(recepciones);var mJ=JSON.stringify(movimientos);
+            fetch(GAS_URL,{method:'POST',mode:'no-cors',body:JSON.stringify({recepciones:rJ,movimientos:mJ})});
+          }
+        })
+        .catch(function(e){console.warn('[TEXTIL] Drive sync:',e.message);});
+    },500);
   }catch(e){
     setSyncStatus('err');
     console.warn('loadFromCloud error:',e);
