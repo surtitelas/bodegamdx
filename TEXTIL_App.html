@@ -781,7 +781,17 @@ function renderDash(){
 // MÓDULO INGRESO
 // ══════════════════════════════════════════════════════════
 function buildTelaOptions(){
-  return TELAS.map(t=>`<option value="${t.name}" data-code="${t.code||''}">${t.name}${t.custom?' ✦':''}</option>`).join('');
+  const catalogMap={};
+  TELAS.forEach(t=>{catalogMap[t.name]=t;});
+  const all=[...TELAS];
+  recepciones.forEach(r=>r.items.forEach(it=>{
+    if(it.tela&&!catalogMap[it.tela]){
+      catalogMap[it.tela]={name:it.tela,code:it.codigo||''};
+      all.push(catalogMap[it.tela]);
+    }
+  }));
+  all.sort((a,b)=>a.name.localeCompare(b.name));
+  return all.map(t=>`<option value="${t.name}" data-code="${t.code||''}">${t.name}${t.custom?' ✦':''}</option>`).join('');
 }
 
 function refreshAllTelaSelects(){
