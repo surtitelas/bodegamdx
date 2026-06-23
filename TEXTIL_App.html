@@ -250,6 +250,11 @@ tr:last-child td{border-bottom:none}
     <span id="load-msg">Conectando…</span>
     <button class="btn btn-ghost btn-sm" onclick="syncNow()" title="Sincronizar">↺</button>
   </div>
+  <div style="padding:10px 16px;border-top:1px solid var(--bor)">
+    <button class="btn btn-primary" style="width:100%;gap:8px" onclick="salvarTodo()" id="btn-salvar">
+      ☁ SALVAR TODO
+    </button>
+  </div>
 </aside>
 
 <!-- CONTENT -->
@@ -712,6 +717,44 @@ async function saveCustomTelas(){
   catch(e){console.warn('saveCustomTelas error:',e);}
 }
 
+async function salvarTodo(){
+  const btn=document.getElementById('btn-salvar');
+  const orig=btn.innerHTML;
+  btn.disabled=true;
+  btn.innerHTML='⏳ Guardando…';
+  try{
+    var rJson=JSON.stringify(recepciones);
+    var mJson=JSON.stringify(movimientos);
+    // Guardar en localStorage
+    try{
+      localStorage.setItem('textil:textil:recepciones',rJson);
+      localStorage.setItem('textil:textil:movimientos',mJson);
+    }catch(e){}
+    // Guardar en GAS (Google Drive)
+    var resp=await fetch(GAS_URL,{
+      method:'POST',
+      headers:{'Content-Type':'text/plain'},
+      body:JSON.stringify({recepciones:rJson,movimientos:mJson})
+    });
+    if(resp.ok){
+      btn.innerHTML='✔ Guardado';
+      btn.style.background='var(--em)';
+      toast('✔ Datos guardados en la nube. Cualquier usuario que abra el enlace verá los cambios.');
+    } else {
+      throw new Error('Respuesta '+resp.status);
+    }
+  }catch(e){
+    btn.innerHTML='✘ Error';
+    btn.style.background='var(--red)';
+    toast('Error al guardar en la nube: '+e.message,'err');
+    console.warn('salvarTodo error:',e);
+  }
+  setTimeout(function(){
+    btn.disabled=false;
+    btn.innerHTML=orig;
+    btn.style.background='';
+  },3000);
+}
 async function syncNow(){
   setSyncStatus('saving');
   await loadFromCloud();
