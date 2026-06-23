@@ -648,21 +648,49 @@ var GAS_URL='https://script.google.com/macros/s/AKfycbwEjHlcpbofYD3jbZx-d8swA1nl
 // ══════════════════════════════════════════════════════════
 // STORAGE
 // ══════════════════════════════════════════════════════════
+function _applyData(r,m){
+  recepciones=r||[];
+  movimientos=(m||[]).map(function(mv){var o=Object.assign({},mv);if(!o.tienda&&o.destino)o.tienda=o.destino;return o;});
+  nidR=Math.max(0,...(recepciones.length?recepciones.map(x=>x.id):[0]))+1;
+  nidM=Math.max(0,...(movimientos.length?movimientos.map(x=>x.id):[0]))+1;
+}
 async function loadFromCloud(){
+  var lmov=document.getElementById('load-msg-ov');
+  // Primero cargar datos embebidos como base (respaldo inmediato)
+  _applyData(window._DI_R, window._DI_M);
+  TELAS.sort((a,b)=>a.name.localeCompare(b.name));
+  // Intentar leer del GAS (datos más recientes de cualquier usuario)
   try{
-    recepciones=window._DI_R||[];
-    movimientos=(window._DI_M||[]).map(function(m){var o=Object.assign({},m);if(!o.tienda&&o.destino)o.tienda=o.destino;return o;});
-    nidR=Math.max(0,...(recepciones.length?recepciones.map(r=>r.id):[0]))+1;
-    nidM=Math.max(0,...(movimientos.length?movimientos.map(m=>m.id):[0]))+1;
-    TELAS.sort((a,b)=>a.name.localeCompare(b.name));
-    _lastSync=new Date();
-    setSyncStatus('ok');
-    var lmov=document.getElementById('load-msg-ov');
-    if(lmov)lmov.textContent='Listo';
+    if(lmov)lmov.textContent='Sincronizando...';
+    setSyncStatus('syncing');
+    var resp=await fetch(GAS_URL+'?action=get',{method:'GET'});
+    if(resp.ok){
+      var data=await resp.json();
+      if(data&&data.recepciones){
+        var gasR=typeof data.recepciones==='string'?JSON.parse(data.recepciones):data.recepciones;
+        var gasM=typeof data.movimientos==='string'?JSON.parse(data.movimientos):data.movimientos;
+        // Usar GAS solo si tiene más datos que los embebidos
+        var gasTotal=(gasR||[]).reduce(function(s,r){return s+(r.items||[]).length;},0)+(gasM||[]).length;
+        var embTotal=(window._DI_R||[]).reduce(function(s,r){return s+(r.items||[]).length;},0)+(window._DI_M||[]).length;
+        if(gasTotal>=embTotal){
+          _applyData(gasR,gasM);
+          if(lmov)lmov.textContent='Listo (Drive)';
+        } else {
+          if(lmov)lmov.textContent='Listo';
+        }
+      } else {
+        if(lmov)lmov.textContent='Listo';
+      }
+    } else {
+      if(lmov)lmov.textContent='Listo';
+    }
   }catch(e){
-    setSyncStatus('err');
-    console.warn('loadFromCloud error:',e);
+    if(lmov)lmov.textContent='Listo';
+    console.warn('GAS fetch error:',e);
   }
+  _lastSync=new Date();
+  setSyncStatus('ok');
+  renderDash();updateSidebar();
 }
 async function save(){
   setSyncStatus('saving');
@@ -671,8 +699,8 @@ async function save(){
     var mJson=JSON.stringify(movimientos);
     try{localStorage.setItem('textil:textil:recepciones',rJson);localStorage.setItem('textil:textil:movimientos',mJson);}catch(e){}
     try{
-      fetch(GAS_URL,{method:'POST',mode:'no-cors',body:JSON.stringify({recepciones:rJson,movimientos:mJson})});
-    }catch(fe){}
+      await fetch(GAS_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({recepciones:rJson,movimientos:mJson})});
+    }catch(fe){console.warn('GAS save error:',fe);}
     _lastSync=new Date();
     setSyncStatus('ok');
   }catch(e){setSyncStatus('err');console.warn('save error:',e);}
