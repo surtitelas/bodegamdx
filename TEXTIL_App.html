@@ -691,11 +691,19 @@ function _syncGasBackground(){
         if(missing.length>0){
           (gasR=gasR||[]).push({id:9000,fecha:'2026-01-01',ref:'INVENTARIO_INICIAL',proveedor:'',items:missing});
         }
-        // Paso 2: ajustar telas con stock negativo (falta cantidad inicial)
+        // Paso 2: ajustar telas con stock negativo usando cantidades del DI_R embebido
+        var embTelasQ={};
+        embItems.forEach(function(it){embTelasQ[it.tela]=(embTelasQ[it.tela]||0)+it.cantidad;});
         var tempInv={};
         (gasR||[]).forEach(function(r){(r.items||[]).forEach(function(it){if(!tempInv[it.tela])tempInv[it.tela]={cod:it.codigo||'',ing:0,sal:0};tempInv[it.tela].ing+=it.cantidad;});});
         (gasM||[]).filter(function(m){return m.tipo==='SALIDA';}).forEach(function(m){if(!tempInv[m.tela])tempInv[m.tela]={cod:m.codigo||'',ing:0,sal:0};tempInv[m.tela].sal+=m.cantidad;});
-        var ajuste=Object.keys(tempInv).filter(function(t){return tempInv[t].ing-tempInv[t].sal<0;}).map(function(t){return {tela:t,codigo:tempInv[t].cod,cantidad:Math.ceil(tempInv[t].sal-tempInv[t].ing),costo:0};});
+        var ajuste=Object.keys(tempInv).filter(function(t){return tempInv[t].ing-tempInv[t].sal<0;}).map(function(t){
+          var gap=tempInv[t].sal-tempInv[t].ing;
+          // Si el DI_R embebido tiene esta tela, usar max(embQ, gap) como ajuste
+          var embQ=embTelasQ[t]||0;
+          var adj=embQ>gap?embQ:gap;
+          return {tela:t,codigo:tempInv[t].cod,cantidad:Math.ceil(adj),costo:0};
+        });
         if(ajuste.length>0){
           (gasR=gasR||[]).push({id:9001,fecha:'2026-01-01',ref:'AJUSTE_INVENTARIO_INICIAL',proveedor:'',items:ajuste});
         }
