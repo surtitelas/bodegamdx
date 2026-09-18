@@ -683,6 +683,22 @@ function _syncGasBackground(){
       var gasTotal=(gasR||[]).reduce(function(s,r){return s+(r.items||[]).length;},0)+(gasM||[]).length;
       var embTotal=(window._DI_R||[]).reduce(function(s,r){return s+(r.items||[]).length;},0)+(window._DI_M||[]).length;
       if(gasTotal>embTotal){
+        // Paso 1: agregar ítems del DI_R embebido que GAS no tiene
+        var gasTelas={};
+        (gasR||[]).forEach(function(r){(r.items||[]).forEach(function(it){gasTelas[it.tela]=true;});});
+        var embItems=(window._DI_R||[]).reduce(function(acc,r){return acc.concat(r.items||[]);}, []);
+        var missing=embItems.filter(function(it){return it.tela&&!gasTelas[it.tela]&&it.cantidad>0;});
+        if(missing.length>0){
+          (gasR=gasR||[]).push({id:9000,fecha:'2026-01-01',ref:'INVENTARIO_INICIAL',proveedor:'',items:missing});
+        }
+        // Paso 2: ajustar telas con stock negativo (falta cantidad inicial)
+        var tempInv={};
+        (gasR||[]).forEach(function(r){(r.items||[]).forEach(function(it){if(!tempInv[it.tela])tempInv[it.tela]={cod:it.codigo||'',ing:0,sal:0};tempInv[it.tela].ing+=it.cantidad;});});
+        (gasM||[]).filter(function(m){return m.tipo==='SALIDA';}).forEach(function(m){if(!tempInv[m.tela])tempInv[m.tela]={cod:m.codigo||'',ing:0,sal:0};tempInv[m.tela].sal+=m.cantidad;});
+        var ajuste=Object.keys(tempInv).filter(function(t){return tempInv[t].ing-tempInv[t].sal<0;}).map(function(t){return {tela:t,codigo:tempInv[t].cod,cantidad:Math.ceil(tempInv[t].sal-tempInv[t].ing),costo:0};});
+        if(ajuste.length>0){
+          (gasR=gasR||[]).push({id:9001,fecha:'2026-01-01',ref:'AJUSTE_INVENTARIO_INICIAL',proveedor:'',items:ajuste});
+        }
         _applyData(gasR,gasM);
         renderDash();updateSidebar();
         var lm=document.getElementById('load-msg');
