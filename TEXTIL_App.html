@@ -719,10 +719,18 @@ function _syncGasBackground(){
         if(ajuste.length>0){
           (gasR=gasR||[]).push({id:9001,fecha:'2026-01-01',ref:'AJUSTE_INVENTARIO_INICIAL',proveedor:'',items:ajuste});
         }
-        // Paso 3: preservar movimientos embedded que GAS no tiene (por id)
-        var gasIds={};(gasM||[]).forEach(function(m){gasIds[m.id]=true;});
-        var embOnly=(window._DI_M||[]).filter(function(m){return !gasIds[m.id];});
-        if(embOnly.length>0){(gasM=gasM||[]).push.apply(gasM,embOnly);}
+        // Paso 3: si una tienda tiene más salidas en embebido que en GAS, usar las del embebido
+        var gasTiendaQ={};
+        (gasM||[]).filter(function(m){return m.tipo==='SALIDA';}).forEach(function(m){gasTiendaQ[m.tienda]=(gasTiendaQ[m.tienda]||0)+1;});
+        var embSalidas=(window._DI_M||[]).filter(function(m){return m.tipo==='SALIDA';});
+        var embTiendaQ={};
+        embSalidas.forEach(function(m){embTiendaQ[m.tienda]=(embTiendaQ[m.tienda]||0)+1;});
+        Object.keys(embTiendaQ).forEach(function(t){
+          if((embTiendaQ[t]||0)>(gasTiendaQ[t]||0)){
+            gasM=(gasM||[]).filter(function(m){return !(m.tipo==='SALIDA'&&m.tienda===t);});
+            gasM=gasM.concat(embSalidas.filter(function(m){return m.tienda===t;}));
+          }
+        });
         _applyData(gasR,gasM);
         renderDash();updateSidebar();
         // Refrescar dropdown de salidas con datos actualizados de GAS
@@ -1696,7 +1704,7 @@ document.addEventListener('DOMContentLoaded', async()=>{
     // Fechas para reportes
     const hace30=new Date();hace30.setDate(hace30.getDate()-30);
     document.getElementById('ri-desde').value=hace30.toISOString().split('T')[0];
-    document.getElementById('rs-desde').value=hace30.toISOString().split('T')[0];
+    // rs-desde sin valor por defecto para mostrar todos los movimientos
     document.getElementById('ri-hasta').value=today();
 
     // Primer ítem de ingreso
